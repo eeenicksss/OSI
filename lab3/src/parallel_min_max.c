@@ -16,6 +16,7 @@
 #include "utils.h"
 
 int main(int argc, char **argv) {
+  
   int seed = -1;
   int array_size = -1;
   int pnum = -1;
@@ -40,24 +41,30 @@ int main(int argc, char **argv) {
         switch (option_index) {
           case 0:
             seed = atoi(optarg);
-            // your code here
-            // error handling
+            if (seed <= 0) {
+              printf("Seed should be a positive number\n");
+              return 1;
+            }
             break;
           case 1:
             array_size = atoi(optarg);
-            // your code here
-            // error handling
+            if (array_size <= 0) {
+              printf("Array size should be a positive number\n");
+              return 1;
+            }
             break;
           case 2:
             pnum = atoi(optarg);
-            // your code here
-            // error handling
+            if (pnum <= 0) {
+              printf("Number of processes should be a positive number\n");
+              return 1;
+            }
             break;
           case 3:
             with_files = true;
             break;
 
-          defalut:
+          default:
             printf("Index %d is out of options\n", option_index);
         }
         break;
@@ -91,6 +98,16 @@ int main(int argc, char **argv) {
   struct timeval start_time;
   gettimeofday(&start_time, NULL);
 
+  int pipefd[2 * pnum];
+
+  int part_size = array_size / pnum;
+
+  if (!with_files) {
+    for (int i = 0; i < pnum; i++) {
+      pipe(pipefd + 2 * i);
+    }
+  }
+  
   for (int i = 0; i < pnum; i++) {
     pid_t child_pid = fork();
     if (child_pid >= 0) {
@@ -100,11 +117,30 @@ int main(int argc, char **argv) {
         // child process
 
         // parallel somehow
+        int begin = i * part_size;
+        int end = (i == pnum - 1) ? array_size : (i + 1) * part_size;
+        struct MinMax min_max = GetMinMax(array, begin, end);
+
 
         if (with_files) {
           // use files here
+          char file_name[255];
+          snprintf(file_name, sizeof(file_name), "min_max_%d.txt", i);
+          FILE *file = fopen(file_name, "w");
+          if (file == NULL) {
+            perror("fopen failed");
+            exit(EXIT_FAILURE);
+          }
+          if (fwrite(&min_max, sizeof(struct MinMax), 1, file) != 1) {
+            perror("fwrite failed");
+            exit(EXIT_FAILURE);
+          }
+          fclose(file);
         } else {
           // use pipe here
+          close(pipefd[2 * i]);
+          write(pipefd[2 * i + 1], &min_max, sizeof(struct MinMax));
+          close(pipefd[2 * i + 1]);
         }
         return 0;
       }
@@ -117,7 +153,7 @@ int main(int argc, char **argv) {
 
   while (active_child_processes > 0) {
     // your code here
-
+    wait(NULL);
     active_child_processes -= 1;
   }
 
@@ -126,17 +162,32 @@ int main(int argc, char **argv) {
   min_max.max = INT_MIN;
 
   for (int i = 0; i < pnum; i++) {
+    struct MinMax local_min_max; // Для хранения локального минимума и максимума
     int min = INT_MAX;
     int max = INT_MIN;
 
     if (with_files) {
       // read from files
+      char file_name[255];
+      snprintf(file_name, sizeof(file_name), "min_max_%d.txt", i);
+      FILE *file = fopen(file_name, "r");
+      if (file == NULL) {
+          perror("Failed to open file");
+          exit(EXIT_FAILURE);
+      }
+      fread(&local_min_max, sizeof(struct MinMax), 1, file);
+      fclose(file);
     } else {
       // read from pipes
+      
+
+      close(pipefd[2 * i + 1]);
+      read(pipefd[2 * i], &local_min_max, sizeof(struct MinMax));
+      close(pipefd[2 * i]);
     }
 
-    if (min < min_max.min) min_max.min = min;
-    if (max > min_max.max) min_max.max = max;
+    if (local_min_max.min < min_max.min) min_max.min = local_min_max.min;
+    if (local_min_max.max > min_max.max) min_max.max = local_min_max.max;
   }
 
   struct timeval finish_time;
