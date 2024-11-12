@@ -1,9 +1,8 @@
 cd lab3/src
-gcc -o sequental_min_max sequential_min_max.c find_min_max.c utils.c
+gcc -o sequental_min_max sequental_min_max.c find_min_max.c utils.c
 ./sequental_min_max 123 40
 gcc -o parallel_min_max parallel_min_max.c find_min_max.c utils.c -lpthread
-./parallel_min_max --seed 123 --array
-_size 40 --pnum 4
+./parallel_min_max --seed 123 --array_size 40 --pnum 4
 make
 make clean
 make

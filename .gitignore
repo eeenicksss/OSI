@@ -1,0 +1,7 @@
+*.o
+*.a
+*.so
+test_reverter
+static_reverter
+dynamic_reverter
+*.out
